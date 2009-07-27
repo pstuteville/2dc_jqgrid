@@ -321,8 +321,20 @@ module JqgridJson
       json << %Q({"id":"#{elem.id}","cell":[)
       couples = elem.attributes.symbolize_keys
       attributes.each do |atr|
-        value = couples[atr]
-        value = elem.send(atr.to_sym) if elem.respond_to?(atr) && value.blank?
+        atr = atr.to_a
+        value = couples[atr[0]]
+        if elem.respond_to?(atr[0]) && value.blank?
+          combined_send_call = atr.inject(nil) {|aggregated_send_object, recursive_send_method|
+          debugger
+            if aggregated_send_object.blank? 
+              aggregated_send_object = elem.send(recursive_send_method.to_sym)
+            else
+              aggregated_send_object = aggregated_send_object.send(recursive_send_method.to_sym)
+            end
+            aggregated_send_object
+            }
+          value = combined_send_call 
+        end
         json << %Q("#{value}",)
       end
       json.chop! << "]},"
