@@ -321,7 +321,16 @@ module JqgridJson
       json << %Q({"id":"#{elem.id}","cell":[)
       couples = elem.attributes.symbolize_keys
       attributes.each do |atr|
-        atr = atr.to_a
+        case atr
+          when String
+            atr = atr.split('.').inject([]) {|array, element| array << element.to_sym}
+          when Array
+            atr = atr.inject([]) {|array, element| array << element.to_sym}
+          when Symbol
+            atr = [atr]
+          else
+            raise ArgumentError, "Must pass a string, array or symbol as array elements.  Received #{atr.inspect}"
+        end
         value = couples[atr[0]]
         if elem.respond_to?(atr[0]) && value.blank?
           combined_send_call = atr.inject(nil) {|aggregated_send_object, recursive_send_method|
