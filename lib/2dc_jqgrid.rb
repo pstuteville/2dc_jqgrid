@@ -16,8 +16,6 @@ module Jqgrid
       css = capture { stylesheet_link_tag 'jqgrid/ui.jqgrid' }    
     end
 
-    end
-
     def jqgrid(title, id, action, columns = [], options = {})
       
       # Default options
@@ -41,7 +39,7 @@ module Jqgrid
       
       # Stringify options values
       options.inject({}) do |options, (key, value)|
-        options[key] = (key != :subgrid) ? value.to_s : value
+        options[key] = (key != :subgrid && key != :custom_buttons && !value.instance_of?(Hash)) ? value.to_s : value
         options
       end
       
@@ -55,16 +53,16 @@ module Jqgrid
       search = ""
       filter_toolbar = ""
       if options[:search] == 'true'
-        search = %Q/.navButtonAdd("##{id}_pager",{caption:"#{options[:search_caption] || ""}",title:"Toggle Search Toolbar", buttonicon :'#{options[:search_icon] || 'ui-icon-search'}', onClickButton:function(){ mygrid[0].toggleToolbar() } })/
-        filter_toolbar = "mygrid.filterToolbar();"
-        filter_toolbar << "mygrid[0].toggleToolbar()"
+        search = %Q/.navButtonAdd("##{id}_pager",{caption:"#{options[:search_caption] || ""}",title:"Toggle Search Toolbar", buttonicon :'#{options[:search_icon] || 'ui-icon-search'}', onClickButton:function(){ mygrid#{id.titlecase}[0].toggleToolbar() } })/
+        filter_toolbar = "mygrid#{id.titlecase}.filterToolbar();"
+        filter_toolbar << "mygrid#{id.titlecase}[0].toggleToolbar()"
       end
 
       # Enable post_data array for appending to each request
       # :post_data => {'_search' => 1, : :myfield => 2}
       post_data = ""
       if options[:post_data]
-        post_data = %Q/postData: #{get_edit_options(options[:post_data])},/
+        post_data = %Q/postData: #{get_sub_options(options[:post_data])},/
       end
       
       # Enable multi-selection (checkboxes)
@@ -253,10 +251,10 @@ module Jqgrid
       # Add options[:custom_buttons] to add custom buttons to nav bar.  Very useful for restful urls among other things.
       # It takes the following hash of arguments (or an array of hashes for many buttons):
       # :function_name => jsFunctionToCallWithSelectedIds, :caption => "Button", :title => "Press Me", :icon => "ui-icon-alert"
+      custom_buttons = ""
       if options[:custom_buttons]
         options[:custom_buttons] = [options[:custom_buttons]] unless options[:custom_buttons].kind_of?(Array)
         get_ids_call = options[:multi_selection] ?  'selarrrow' : 'selrow'
-        custom_buttons = ""
         options[:custom_buttons].find_all{|custom_button_details|  custom_button_details.kind_of?(Hash) }.each do |button_properties_hash|
           next if button_properties_hash[:function_name].blank?
           custom_buttons += %Q(.navButtonAdd(
@@ -282,7 +280,7 @@ module Jqgrid
         var lastsel;
         var gridimgpath = '/images/jqgrid'; 
         jQuery(document).ready(function(){
-        var mygrid = jQuery("##{id}").jqGrid({
+        var mygrid#{id.titlecase} = jQuery("##{id}").jqGrid({
             url:'#{action}?q=1',
             editurl:'#{options[:edit_url]}',
             datatype: "json",
@@ -317,11 +315,11 @@ module Jqgrid
         {afterSubmit:function(r,data){return #{options[:error_handler_return_value]}(r,data,'edit');}},
         {afterSubmit:function(r,data){return #{options[:error_handler_return_value]}(r,data,'add');}},
         {afterSubmit:function(r,data){return #{options[:error_handler_return_value]}(r,data,'delete');}})
+        #{custom_buttons}
         #{search}
         #{multihandler}
         #{selection_link}
         #{filter_toolbar}
-        #{custom_buttons}
         });
         </script>
         <table id="#{id}" class="scroll" cellpadding="0" cellspacing="0"></table>
@@ -357,9 +355,9 @@ module Jqgrid
         elsif couple[0] == :editrules
           options << "editrules:#{get_sub_options(couple[1])},"
           # need to pass a string function name but result can't be surrounded in quotes
-        elsif couple[0] == :formatter
+        elsif couple[0] == :format_function || couple[0] == :formatter_function
           options << "formatter:#{couple[1]},"
-        elsif couple[0] == :unformat || couple[0] == :unformatter
+        elsif couple[0] == :unformat_function || couple[0] == :unformatter_function
           options << "unformat:#{couple[1]},"
         else
           case couple[1]
@@ -367,7 +365,7 @@ module Jqgrid
               options << "#{couple[0]}:'#{couple[1]}',"
             when Hash
               options << %Q/#{couple[0]}:/
-              options << get_edit_options(couple[1])
+              options << get_sub_options(couple[1])
               options << ","
             else
               options << "#{couple[0]}:#{couple[1]},"
@@ -407,12 +405,12 @@ module Jqgrid
         end
       end
       options.chop! << "}"
-    end 
+    end
 end
 
 
 module JqgridJson
-  def to_jqgrid_json(attributes, current_page, per_page, total)
+  def to_jqgrid_json(attributes, current_page, per_page, total, options={})
     json = %Q({"page":"#{current_page}","total":#{total/per_page.to_i+1},"records":"#{total}")
     if total > 0
       json << %Q(,"rows":[)
@@ -421,13 +419,12 @@ module JqgridJson
         json << %Q({"id":"#{elem.id}","cell":[)
         couples = elem.attributes.symbolize_keys
         attributes.each do |atr|
-          value = get_atr_value(elem, atr, couples)
+          value = get_atr_value(elem, atr, couples, options)
           json << %Q("#{value}",)
         end
-        json.chop! if json.last == ',' << "]},"
-
+        json.chop! << "]},"
       end
-      json.chop! unless json.last == "[" << "]}"
+      json.chop! << "]}"
     else
       json << "}"
     end
@@ -435,14 +432,14 @@ module JqgridJson
   
   private
   
-  def get_atr_value(elem, atr, couples)
+  def get_atr_value(elem, atr, couples, options)
     if atr.instance_of?(String) && atr.include?('.')
       value = get_nested_atr_value(elem, atr.split('.').reverse) 
     else
       value = couples[atr]
       value = elem.send(atr.to_sym) if value.blank? && elem.respond_to?(atr) # Required for virtual attributes
-      value = (value ? options[:true_text] || "Yes" : options[:false_text] || "No") if value.kind_of?(TrueClass) || value.kind_of?(FalseClass)
     end
+    value = (value ? options[:true_text] || "Yes" : options[:false_text] || "No") if value.instance_of?(TrueClass) || value.instance_of?(FalseClass)
     value
   end
   
@@ -454,5 +451,111 @@ module JqgridJson
     return "" if nested_elem.nil?
     value = get_nested_atr_value(nested_elem, hierarchy)
     value.nil? ? nested_elem : value
+  end
+end
+
+module ApplicationHelper
+  def jqgrid_restful_add_edit_delete_buttons(options={})
+    options[:width] ||= 600
+
+    events = ","
+    events << %Q(onInitializeForm: #{options[:on_initialize_form] + ","}) unless options[:on_initialize_form].blank?
+    events << %Q(beforeShowForm: #{options[:before_show_form] + ","}) unless options[:before_show_form].blank?
+    events.chomp!
+    
+    options[:add_function] ||= %Q(
+		jQuery("##{options[:div_object]}").editGridRow("new",
+			{	mtype:'POST',
+				closeAfterAdd:true,
+				width:#{options[:width]},
+				reloadAfterSubmit:true,
+				afterSubmit:checkForAndDisplayErrors,
+				url:'#{ options[:base_path] }' + '.json?' + (window.rails_authenticity_token ? '&authenticity_token='+encodeURIComponent(window.rails_authenticity_token) : '')
+				#{events}
+			}
+			);
+    )
+
+    options[:edit_function] ||= %Q(
+   	 	jQuery("##{options[:div_object]}").editGridRow(id,
+   	 		{	mtype:'PUT',
+   	 			closeAfterEdit:true,
+   	 			width:#{options[:width]},
+   				afterSubmit:checkForAndDisplayErrors,
+   	 			reloadAfterSubmit:true,
+   	 			url:'#{ options[:base_path] }/' + id + '.json?' + (window.rails_authenticity_token ? '&authenticity_token='+encodeURIComponent(window.rails_authenticity_token) : '')
+  				#{events}
+   			}
+   			);
+    )
+    options[:delete_function] ||= %Q(
+      jQuery("##{options[:div_object]}").delGridRow(id,
+    		{	mtype:'DELETE',
+    			closeAfterEdit:true,
+    			reloadAfterSubmit:true,
+    			afterSubmit:checkForAndDisplayErrors,
+    			url:'#{ options[:base_path] }/' + id + '.json?' + (window.rails_authenticity_token ? '&authenticity_token='+encodeURIComponent(window.rails_authenticity_token) : '')
+    		});
+  		)
+
+    options[:duplicate_function] ||= %Q(
+   	 	jQuery("##{options[:div_object]}").editGridRow(id,
+   	 		{	mtype:'POST',
+   	 			closeAfterEdit:true,
+   	 			width:#{options[:width]},
+   				afterSubmit:checkForAndDisplayErrors,
+   	 			reloadAfterSubmit:true,
+   	 			url:'#{ options[:base_path] }/' + id + '/duplicate.json?' + (window.rails_authenticity_token ? '&authenticity_token='+encodeURIComponent(window.rails_authenticity_token) : '')
+  				#{events}
+   			}
+   			);
+    )
+  	
+  	options[:get_page_for_selected_id] ||= %Q('#{options[:base_path]}')
+    
+    return "" if options[:name].blank? || options[:base_path].blank? || options[:div_object].blank?
+    %Q(
+      <script type="text/javascript">
+      	function add#{options[:name].singularize.camelcase}(id) {
+      	  #{options[:add_function]}
+      	};
+      	function edit#{options[:name].singularize.camelcase}(id){
+      	 if( id != null )
+           #{options[:edit_function]}
+      	 else
+      	 	alert("Please select a #{options[:name].singularize.downcase} to edit.");
+      	 };
+
+      	function delete#{options[:name].singularize.camelcase}(id){
+      		if ( id != null )
+            #{options[:delete_function]}
+      		else
+      			alert("Please select a #{options[:name].singularize.downcase} to delete");
+      		}
+      	function getPage(id){
+      	  if ( id != null )
+            document.location=#{ options[:get_page_for_selected_id] };
+      		else
+      			alert("Please select a #{options[:name].singularize.downcase}");
+      		}
+
+      </script>
+  )
+  end
+end
+
+class ApplicationController
+  def jqgrid_error_messages_for(activerecord_object)
+    error_text = ""
+     if activerecord_object
+       activerecord_object.errors.entries.each do |error|
+         if error[1] =~ /^!!\^/
+           error_text << "<strong>#{error[1].gsub(/^!!\^/,'')}</strong><br/>"
+         else
+           error_text << "<strong>#{error[0]}</strong> : #{error[1]}<br/>"
+         end
+       end
+     end
+    render :json => [false,"#{error_text}"]
   end
 end
