@@ -3,16 +3,45 @@ module ActionView
   module Helpers
     
     def jqgrid_stylesheets
-      css = capture { stylesheet_link_tag 'jqgrid/ui.all' }
-      css << capture { stylesheet_link_tag 'jqgrid/ui.jqgrid' }    
+      # css = capture { stylesheet_link_tag 'jqgrid/ui.all' }
+      # css << capture { stylesheet_link_tag 'jqgrid/ui.jqgrid' }    
+      css = capture { stylesheet_link_tag 'jqgrid/ui.jqgrid' }    
+      # css << capture { stylesheet_link_tag 'jqgrid/jquery-ui-1.7.1.custom' }    
     end
 
     def jqgrid_javascripts
-      js = capture { javascript_include_tag 'jqgrid/jquery' }
-      js << capture { javascript_include_tag 'jqgrid/jquery.ui.all' }
-      js << capture { javascript_include_tag 'jqgrid/jquery.layout' }
-      js << capture { javascript_include_tag 'jqgrid/jqModal' }
-      js << capture { javascript_include_tag 'jqgrid/jquery.jqGrid' }
+      # javascript 'jquery-1.3.2.min', 'jquery-ui-1.7.2.custom.min', 'jqModal'
+      # js = capture { javascript_include_tag 'jqgrid/jquery' }
+      # js << capture { javascript_include_tag 'jqgrid/jquery.ui.all' }
+      # js << capture { javascript_include_tag 'jqgrid/jquery.layout' }
+      # js << capture { javascript_include_tag 'jqgrid/jqModal' }
+      # js << capture { javascript_include_tag 'jqgrid/jquery.jqGrid' }
+      # js = capture { javascript_include_tag 'jquery-1.3.2.min' }
+      # js << capture { javascript_include_tag 'jquery-ui-1.7.2.custom.min' }
+      # js = capture { javascript_include_tag 'jquery.layout.min' }
+      # js << capture { javascript_include_tag 'jqModal' }
+      js = capture { javascript_include_tag 'jqgrid/i18n/grid.locale-en' }
+      js << capture { javascript_include_tag 'jqgrid/jquery.jqGrid.min' }
+      
+      # js << capture { javascript_include_tag 'jqgrid/JsonXml.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.base.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.celledit.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.common.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.custom.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.formedit.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.import.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.inlinedit.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.loader.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.postext.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.setcolumns.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.subgrid.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.tbltogrid.js' }
+      # js << capture { javascript_include_tag 'jqgrid/grid.treegrid.js' }
+      # js << capture { javascript_include_tag 'jqgrid/jqDnR.js' }
+      # js << capture { javascript_include_tag 'jqgrid/jqModal.js' }
+      # js << capture { javascript_include_tag 'jqgrid/jquery.fmatter.js' }
+      # js << capture { javascript_include_tag 'jqgrid/jquery.searchFilter.js' }
+      
     end
 
     def jqgrid(title, id, action, columns = {}, options = {})
@@ -35,6 +64,30 @@ module ActionView
       # Generate columns data
       col_names, col_model = gen_columns(columns)
 
+      # Disablable search
+      search_button = ""
+      unless options[:search].kind_of?(FalseClass)
+        search_button = %Q(
+      .navButtonAdd("##{id}_pager",{caption:"#{options[:search_caption] || "Search"}",title:"#{options[:search_title] || "Toggle Search"}",buttonicon:'#{options[:search_icon] || 'ui-icon-search'}',
+      	onClickButton:function(){ 
+      		if(jQuery("#t_#{id}").css("display")=="none") {
+      			jQuery("#t_#{id}").css("display","");
+      		} else {
+      			jQuery("#t_#{id}").css("display","none");
+      		}
+      	} 
+      })
+      )
+      end
+ 
+      # Enable post_data array for appending to each request
+      # :post_data => {'_search' => 1, : :myfield => 2}
+      post_data = ""
+      if options[:post_data]
+        post_data = %Q/postData: #{get_edit_options(options[:post_data])},/
+      end
+      
+      
       # Enable multi-selection (checkboxes)
       multiselect = ""
       if options[:multi_selection]
@@ -136,6 +189,8 @@ module ActionView
         options[:subgrid][:delete] = (options[:subgrid][:delete].blank?) ? "false" : options[:subgrid][:delete].to_s
         options[:subgrid][:edit] = (options[:subgrid][:edit].blank?) ? "false" : options[:subgrid][:edit].to_s   
         
+        cut
+        
         subgrid_inline_edit = ""
         if options[:subgrid][:inline_edit] == true
           options[:subgrid][:edit] = "false"
@@ -176,7 +231,7 @@ module ActionView
         			colModel: #{sub_col_model},
         		   	rowNum:#{options[:subgrid][:rows_per_page]},
         		   	pager: pager_id,
-        		   	imgpath: '/images/themes/lightness/images',
+        		   	imgpath: '/images/jqgrid',
         		   	sortname: '#{options[:subgrid][:sort_column]}',
         		    sortorder: '#{options[:subgrid][:sort_order]}',
                 viewrecords: true,
@@ -202,27 +257,58 @@ module ActionView
         )
       end
 
+
+      
+      # Add options[:custom_buttons] to add custom buttons to nav bar.  Very useful for restful urls among other things.
+      # It takes the following hash of arguments (or an array of hashes for many buttons):
+      # :function_name => jsFunctionToCallWithSelectedIds, :caption => "Button", :title => "Press Me", :icon => "ui-icon-alert"
+      if options[:custom_buttons]
+        options[:custom_buttons] = [options[:custom_buttons]] unless options[:custom_buttons].kind_of?(Array)
+        get_ids_call = options[:multi_selection] ?  'selarrrow' : 'selrow'
+        custom_buttons = ""
+        options[:custom_buttons].find_all{|custom_button_details|  custom_button_details.kind_of?(Hash) }.each do |button_properties_hash|
+          next if button_properties_hash[:function_name].blank?
+          custom_buttons += %Q(.navButtonAdd(
+            '##{id}_pager',
+            {
+              caption:"#{escape_javascript(button_properties_hash[:caption]) || ''}",
+              title:"#{escape_javascript(button_properties_hash[:title]) || 'Custom Button'}", 
+              buttonicon:"#{button_properties_hash[:icon] || "ui-icon-alert"}", 
+              onClickButton: function(){ 
+                              var selected_ids = jQuery("##{id}").getGridParam("#{get_ids_call}")
+                              // no check for null selected_ids as someone may want an Add button or something similar
+                              #{button_properties_hash[:function_name]}(selected_ids);
+                            }
+            })
+          )
+        end
+      end
+      
       # Generate required Javascript & html to create the jqgrid
       %Q(
+      <link rel="stylesheet" type="text/css" media="screen" href="/stylesheets/jqgrid/ui.jqgrid.css" />
         <script type="text/javascript">
         var lastsel;
+        var gridimgpath = '/images/jqgrid'; 
         jQuery(document).ready(function(){
         jQuery("##{id}").jqGrid({
             // adding ?nd='+new Date().getTime() prevent IE caching
             url:'#{action}?nd='+new Date().getTime(),
-            editurl:'#{options[:edit_url]}',
+            editurl:'#{options.delete(:edit_url)}',
             datatype: "json",
             colNames:#{col_names},
             colModel:#{col_model},
             pager: jQuery('##{id}_pager'),
-            rowNum:#{options[:rows_per_page]},
+            rowNum:#{options.delete(:rows_per_page)},
             rowList:[10,25,50,100],
-            imgpath: '/images/themes/lightness/images',
-            sortname: '#{options[:sort_column]}',
+            imgpath: '/images/jqgrid',
+            sortname: '#{options.delete(:sort_column)}',
             viewrecords: true,
-            height: #{options[:height]},            
-            toolbar : [true,"top"], 
-            sortorder: '#{options[:sort_order]}',
+            height: '#{options.delete(:height)}',            
+            toolbar : [true,"top"],
+            #{options[:width].blank? ? '' : "width:" + "'" + options.delete(:width).to_s + "'" + ',' } 
+            sortorder: '#{options.delete(:sort_order)}',
+            #{post_data}
             #{multiselect}
             #{masterdetails}
             #{grid_loaded}
@@ -236,25 +322,34 @@ module ActionView
         #{multihandler}
         #{selection_link}
         jQuery("##{id}").navGrid('##{id}_pager',{edit:#{edit_button},add:#{options[:add]},del:#{options[:delete]},search:false,refresh:true},
-        {afterSubmit:function(r,data){return #{options[:error_handler_return_value]}(r,data,'edit');}},
+        {height:290,reloadAfterSubmit:false, jqModal:false, closeOnEscape:true, bottominfo:"Fields marked with (*) are required",afterSubmit:function(r,data){return #{options[:error_handler_return_value]}(r,data,'edit');}},
         {afterSubmit:function(r,data){return #{options[:error_handler_return_value]}(r,data,'add');}},
         {afterSubmit:function(r,data){return #{options[:error_handler_return_value]}(r,data,'delete');}
         })
-        .navButtonAdd("##{id}_pager",{caption:"Search",title:"Toggle Search",buttonimg:'/images/jqgrid/search.png',
-        	onClickButton:function(){ 
-        		if(jQuery("#t_#{id}").css("display")=="none") {
-        			jQuery("#t_#{id}").css("display","");
-        		} else {
-        			jQuery("#t_#{id}").css("display","none");
-        		}
-        	} 
-        });
+        #{search_button}#{custom_buttons};
         });
         </script>
         <table id="#{id}" class="scroll" cellpadding="0" cellspacing="0"></table>
         <div id="#{id}_pager" class="scroll" style="text-align:center;"></div>
       )
     end
+    # .navButtonAdd('##{id}_pager',{caption:”Create PDF”, buttonimg:”../images/pdf.gif”, 
+    #   onClickButton: function() {
+    #    document.location.href='ExportToPDF.cfm';
+    #   }, position:”last”, title: 'Export to PDF' });
+    
+    # .navButtonAdd("##{id}_pager",{caption:"Edit",title:"Toggle Search",buttonimg:'/images/jqgrid/search.png',
+    #   onClickButton:function(rowid){ 
+    #     var gr = jQuery("#grid_id").getGridParam("selrow"); 
+    #     if( gr != null ){
+    #       alert('');
+    #      document.location.href='ExportToPDF.cfm';
+    #       
+    #     } else {
+    #       alert('Please select a row to edit');              
+    #     }
+    #   } 
+    # })
 
     private
     
@@ -264,7 +359,7 @@ module ActionView
       col_model = "[" # Options
       columns.each do |c|
         col_names << "'#{c[:label]}',"
-        col_model << "{name:'#{c[:field]}', index:'#{c[:field]}'#{get_attributes(c)}},"
+        col_model << "{name:'#{c[:field]}', index:'#{c[:field]}'#{get_attributes(c)}, hidden:#{c[:hidden] || 'false'}, formoptions:#{c[:formoptions] ? c[:formoptions] : '{}' }},"
       end
       col_names.chop! << "]"
       col_model.chop! << "]"
@@ -274,14 +369,23 @@ module ActionView
     # Generate a list of attributes for related column (align:'right', sortable:true, resizable:false, ...)
     def get_attributes(column)
       options = ","
-      column.except(:field, :label).each do |couple|
+      column.except(:field, :label, :formoptions).each do |couple|
         if couple[0] == :editoptions
           options << "editoptions:#{get_edit_options(couple[1])},"
+        elsif couple[0] == :custom_formatter
+          options << "formatter:#{couple[1]},"
+        elsif couple[0] == :custom_unformatter
+          options << "unformat:#{couple[1]},"
         else
-          if couple[1].class == String
-            options << "#{couple[0]}:'#{couple[1]}',"
-          else
-            options << "#{couple[0]}:#{couple[1]},"
+          case couple[1]
+            when String
+              options << "#{couple[0]}:'#{couple[1]}',"
+            when Hash
+              options << %Q/#{couple[0]}:/
+              options << get_edit_options(couple[1])
+              options << ","
+            else
+              options << "#{couple[0]}:#{couple[1]},"
           end
         end
       end
@@ -294,8 +398,13 @@ module ActionView
       editoptions.each do |couple|
         if couple[0] == :value # :value => [[1, "Rails"], [2, "Ruby"], [3, "jQuery"]]
           options << %Q/value:"/
-          couple[1].each do |v|
-            options << "#{v[0]}:#{v[1]};"
+          case couple[1][0]
+            when Array
+              couple[1].each do |v|
+                options << "#{v[0]}:#{v[1]};"
+              end
+            else
+              options << "#{couple[1][0]}:#{couple[1][1]};"
           end
           options.chop! << %Q/",/
         elsif couple[0] == :data # :data => [Category.all, :id, :title])
@@ -329,12 +438,11 @@ module JqgridJson
           when Symbol
             atr = [atr]
           else
-            raise ArgumentError, "Must pass a string, array or symbol as array elements.  Received #{atr.inspect}"
+            raise ArgumentError, "Must pass a string or array.  Received #{atr.inspect}"
         end
         value = couples[atr[0]]
         if elem.respond_to?(atr[0]) && value.blank?
           combined_send_call = atr.inject(nil) {|aggregated_send_object, recursive_send_method|
-          debugger
             if aggregated_send_object.blank? 
               aggregated_send_object = elem.send(recursive_send_method.to_sym)
             else
@@ -343,12 +451,14 @@ module JqgridJson
             aggregated_send_object
             }
           value = combined_send_call 
+          value = (value ? "Yes" : "No") if value.kind_of?(TrueClass) || value.kind_of?(FalseClass)
         end
         json << %Q("#{value}",)
       end
       json.chop! << "]},"
     end
-    json.chop! << "]}"
+    json.chop! unless json.last == "[" 
+    json << "]}"
   end
 end
 
