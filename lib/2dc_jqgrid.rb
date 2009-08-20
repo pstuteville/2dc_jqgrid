@@ -544,21 +544,7 @@ module ApplicationHelper
   end
 end
 
-class ApplicationController
-  def jqgrid_error_messages_for(activerecord_object)
-    error_text = ""
-     if activerecord_object
-       activerecord_object.errors.entries.each do |error|
-         if error[1] =~ /^!!\^/
-           error_text << "<strong>#{error[1].gsub(/^!!\^/,'')}</strong><br/>"
-         else
-           error_text << "<strong>#{error[0]}</strong> : #{error[1]}<br/>"
-         end
-       end
-     end
-    render :json => [false,"#{error_text}"]
-  end
-end  module Jqgrid
+module Jqgrid
 
       def jqgrid_stylesheets
         css = %Q(<link rel="stylesheet" type="text/css" media="screen" href="/jqgrid/jquery-ui-1.7.1.custom.css" />\n)
@@ -1104,18 +1090,18 @@ end  module Jqgrid
     end
   end
 
-  module JqgridNotifiable
-    def jqgrid_error_messages_for(activerecord_object)
-      error_text = ""
-       if activerecord_object
-         activerecord_object.errors.entries.each do |error|
-           if error[1] =~ /^!!\^/
-             error_text << "<strong>#{error[1].gsub(/^!!\^/,'')}</strong><br/>"
-           else
-             error_text << "<strong>#{error[0]}</strong> : #{error[1]}<br/>"
-           end
+module JqgridNotifiable
+  def jqgrid_error_messages_for(activerecord_object)
+    error_text = ""
+     if activerecord_object
+       activerecord_object.errors.entries.each do |error|
+         if error[1] =~ /^!!\^/
+           error_text << "<strong>#{error[1].gsub(/^!!\^/,'')}</strong><br/>"
+         else
+           error_text << "<strong>#{error[0]}</strong> : #{error[1]}<br/>"
          end
        end
-      render :json => [false,"#{error_text}"]
-    end
+     end
+    render :json => [false,"#{error_text}"]
   end
+end
