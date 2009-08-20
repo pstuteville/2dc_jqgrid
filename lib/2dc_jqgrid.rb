@@ -13,6 +13,9 @@ module Jqgrid
       js << %Q(<script src="/jqgrid/js/jquery.jqGrid.min.js" type="text/javascript"></script>\n)
       js << %Q(<script src="/jqgrid/js/jquery.tablednd.js" type="text/javascript"></script>\n)
       js << %Q(<script src="/jqgrid/js/jquery.contextmenu.js" type="text/javascript"></script>)                    
+      css = capture { stylesheet_link_tag 'jqgrid/ui.jqgrid' }    
+    end
+
     end
 
     def jqgrid(title, id, action, columns = [], options = {})
@@ -52,11 +55,18 @@ module Jqgrid
       search = ""
       filter_toolbar = ""
       if options[:search] == 'true'
-        search = %Q/.navButtonAdd("##{id}_pager",{caption:"",title:"Toggle Search Toolbar", buttonicon :'ui-icon-search', onClickButton:function(){ mygrid[0].toggleToolbar() } })/
+        search = %Q/.navButtonAdd("##{id}_pager",{caption:"#{options[:search_caption] || ""}",title:"Toggle Search Toolbar", buttonicon :'#{options[:search_icon] || 'ui-icon-search'}', onClickButton:function(){ mygrid[0].toggleToolbar() } })/
         filter_toolbar = "mygrid.filterToolbar();"
         filter_toolbar << "mygrid[0].toggleToolbar()"
       end
 
+      # Enable post_data array for appending to each request
+      # :post_data => {'_search' => 1, : :myfield => 2}
+      post_data = ""
+      if options[:post_data]
+        post_data = %Q/postData: #{get_edit_options(options[:post_data])},/
+      end
+      
       # Enable multi-selection (checkboxes)
       multiselect = "multiselect: false,"
       if options[:multi_selection]
@@ -170,6 +180,8 @@ module Jqgrid
           suboptions
         end
         
+        cut
+        
         subgrid_inline_edit = ""
         if options[:subgrid][:inline_edit] == true
           options[:subgrid][:edit] = 'false'
@@ -210,7 +222,7 @@ module Jqgrid
         			colModel: #{sub_col_model},
         		   	rowNum:#{options[:subgrid][:rows_per_page]},
         		   	pager: pager_id,
-        		   	imgpath: '/images/themes/lightness/images',
+        		   	imgpath: '/images/jqgrid',
         		   	sortname: '#{options[:subgrid][:sort_column]}',
         		    sortorder: '#{options[:subgrid][:sort_order]}',
                 viewrecords: true,
@@ -236,10 +248,39 @@ module Jqgrid
         )
       end
 
+
+      
+      # Add options[:custom_buttons] to add custom buttons to nav bar.  Very useful for restful urls among other things.
+      # It takes the following hash of arguments (or an array of hashes for many buttons):
+      # :function_name => jsFunctionToCallWithSelectedIds, :caption => "Button", :title => "Press Me", :icon => "ui-icon-alert"
+      if options[:custom_buttons]
+        options[:custom_buttons] = [options[:custom_buttons]] unless options[:custom_buttons].kind_of?(Array)
+        get_ids_call = options[:multi_selection] ?  'selarrrow' : 'selrow'
+        custom_buttons = ""
+        options[:custom_buttons].find_all{|custom_button_details|  custom_button_details.kind_of?(Hash) }.each do |button_properties_hash|
+          next if button_properties_hash[:function_name].blank?
+          custom_buttons += %Q(.navButtonAdd(
+            '##{id}_pager',
+            {
+              caption:"#{escape_javascript(button_properties_hash[:caption]) || ''}",
+              title:"#{escape_javascript(button_properties_hash[:title]) || 'Custom Button'}", 
+              buttonicon:"#{button_properties_hash[:icon] || "ui-icon-alert"}", 
+              onClickButton: function(){ 
+                              var selected_ids = jQuery("##{id}").getGridParam("#{get_ids_call}")
+                              // no check for null selected_ids as someone may want an Add button or something similar
+                              #{button_properties_hash[:function_name]}(selected_ids);
+                            }
+            })
+          )
+        end
+      end
+      
       # Generate required Javascript & html to create the jqgrid
       %Q(
+      <link rel="stylesheet" type="text/css" media="screen" href="/stylesheets/jqgrid/ui.jqgrid.css" />
         <script type="text/javascript">
         var lastsel;
+        var gridimgpath = '/images/jqgrid'; 
         jQuery(document).ready(function(){
         var mygrid = jQuery("##{id}").jqGrid({
             url:'#{action}?q=1',
@@ -249,16 +290,19 @@ module Jqgrid
             colModel:#{col_model},
             pager: '##{id}_pager',
             rowNum:#{options[:rows_per_page]},
+
             rowList:[10,25,50,100],
-            imgpath: '/images/themes/lightness/images',
-            sortname: '#{options[:sort_column]}',
+            imgpath: '/images/jqgrid',
+            sortname: '#{options.delete(:sort_column)}',
             viewrecords: true,
-            height: #{options[:height]},
+            height: '#{options[:height]}',
             sortorder: '#{options[:sort_order]}',
             gridview: #{options[:gridview]},
             scrollrows: true,
             autowidth: #{options[:autowidth]},
             rownumbers: #{options[:rownumbers]},
+            #{options[:width].blank? ? '' : "width:" + "'" + options[:width].to_s + "'" + ',' } 
+            #{post_data}
             #{multiselect}
             #{masterdetails}
             #{grid_loaded}
@@ -277,6 +321,7 @@ module Jqgrid
         #{multihandler}
         #{selection_link}
         #{filter_toolbar}
+        #{custom_buttons}
         });
         </script>
         <table id="#{id}" class="scroll" cellpadding="0" cellspacing="0"></table>
@@ -292,7 +337,7 @@ module Jqgrid
       col_model = "[" # Options
       columns.each do |c|
         col_names << "'#{c[:label]}',"
-        col_model << "{name:'#{c[:field]}', index:'#{c[:field]}'#{get_attributes(c)}},"
+        col_model << "{name:'#{c[:field]}', index:'#{c[:field]}'#{get_attributes(c)}, hidden:#{c[:hidden] || 'false'}, formoptions:#{c[:formoptions] ? c[:formoptions] : '{}' }},"
       end
       col_names.chop! << "]"
       col_model.chop! << "]"
@@ -311,11 +356,21 @@ module Jqgrid
           options << "searchoptions:#{get_sub_options(couple[1])},"
         elsif couple[0] == :editrules
           options << "editrules:#{get_sub_options(couple[1])},"
+          # need to pass a string function name but result can't be surrounded in quotes
+        elsif couple[0] == :formatter
+          options << "formatter:#{couple[1]},"
+        elsif couple[0] == :unformat || couple[0] == :unformatter
+          options << "unformat:#{couple[1]},"
         else
-          if couple[1].class == String
-            options << "#{couple[0]}:'#{couple[1]}',"
-          else
-            options << "#{couple[0]}:#{couple[1]},"
+          case couple[1]
+            when String
+              options << "#{couple[0]}:'#{couple[1]}',"
+            when Hash
+              options << %Q/#{couple[0]}:/
+              options << get_edit_options(couple[1])
+              options << ","
+            else
+              options << "#{couple[0]}:#{couple[1]},"
           end
         end
       end
@@ -328,8 +383,13 @@ module Jqgrid
       editoptions.each do |couple|
         if couple[0] == :value # :value => [[1, "Rails"], [2, "Ruby"], [3, "jQuery"]]
           options << %Q/value:"/
-          couple[1].each do |v|
-            options << "#{v[0]}:#{v[1]};"
+          case couple[1][0]
+            when Array
+              couple[1].each do |v|
+                options << "#{v[0]}:#{v[1]};"
+              end
+            else
+              options << "#{couple[1][0]}:#{couple[1][1]};"
           end
           options.chop! << %Q/",/
         elsif couple[0] == :data # :data => [Category.all, :id, :title])
@@ -364,9 +424,10 @@ module JqgridJson
           value = get_atr_value(elem, atr, couples)
           json << %Q("#{value}",)
         end
-        json.chop! << "]},"
+        json.chop! if json.last == ',' << "]},"
+
       end
-      json.chop! << "]}"
+      json.chop! unless json.last == "[" << "]}"
     else
       json << "}"
     end
@@ -380,6 +441,7 @@ module JqgridJson
     else
       value = couples[atr]
       value = elem.send(atr.to_sym) if value.blank? && elem.respond_to?(atr) # Required for virtual attributes
+      value = (value ? options[:true_text] || "Yes" : options[:false_text] || "No") if value.kind_of?(TrueClass) || value.kind_of?(FalseClass)
     end
     value
   end
