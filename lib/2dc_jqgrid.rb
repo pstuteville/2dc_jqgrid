@@ -454,95 +454,7 @@ module JqgridJson
   end
 end
 
-module ApplicationHelper
-  def jqgrid_restful_add_edit_delete_buttons(options={})
-    options[:width] ||= 600
 
-    events = ","
-    events << %Q(onInitializeForm: #{options[:on_initialize_form] + ","}) unless options[:on_initialize_form].blank?
-    events << %Q(beforeShowForm: #{options[:before_show_form] + ","}) unless options[:before_show_form].blank?
-    events.chomp!
-    
-    options[:add_function] ||= %Q(
-		jQuery("##{options[:div_object]}").editGridRow("new",
-			{	mtype:'POST',
-				closeAfterAdd:true,
-				width:#{options[:width]},
-				reloadAfterSubmit:true,
-				afterSubmit:checkForAndDisplayErrors,
-				url:'#{ options[:base_path] }' + '.json?' + (window.rails_authenticity_token ? '&authenticity_token='+encodeURIComponent(window.rails_authenticity_token) : '')
-				#{events}
-			}
-			);
-    )
-
-    options[:edit_function] ||= %Q(
-   	 	jQuery("##{options[:div_object]}").editGridRow(id,
-   	 		{	mtype:'PUT',
-   	 			closeAfterEdit:true,
-   	 			width:#{options[:width]},
-   				afterSubmit:checkForAndDisplayErrors,
-   	 			reloadAfterSubmit:true,
-   	 			url:'#{ options[:base_path] }/' + id + '.json?' + (window.rails_authenticity_token ? '&authenticity_token='+encodeURIComponent(window.rails_authenticity_token) : '')
-  				#{events}
-   			}
-   			);
-    )
-    options[:delete_function] ||= %Q(
-      jQuery("##{options[:div_object]}").delGridRow(id,
-    		{	mtype:'DELETE',
-    			closeAfterEdit:true,
-    			reloadAfterSubmit:true,
-    			afterSubmit:checkForAndDisplayErrors,
-    			url:'#{ options[:base_path] }/' + id + '.json?' + (window.rails_authenticity_token ? '&authenticity_token='+encodeURIComponent(window.rails_authenticity_token) : '')
-    		});
-  		)
-
-    options[:duplicate_function] ||= %Q(
-   	 	jQuery("##{options[:div_object]}").editGridRow(id,
-   	 		{	mtype:'POST',
-   	 			closeAfterEdit:true,
-   	 			width:#{options[:width]},
-   				afterSubmit:checkForAndDisplayErrors,
-   	 			reloadAfterSubmit:true,
-   	 			url:'#{ options[:base_path] }/' + id + '/duplicate.json?' + (window.rails_authenticity_token ? '&authenticity_token='+encodeURIComponent(window.rails_authenticity_token) : '')
-  				#{events}
-   			}
-   			);
-    )
-  	
-  	options[:get_page_for_selected_id] ||= %Q('#{options[:base_path]}')
-    
-    return "" if options[:name].blank? || options[:base_path].blank? || options[:div_object].blank?
-    %Q(
-      <script type="text/javascript">
-      	function add#{options[:name].singularize.camelcase}(id) {
-      	  #{options[:add_function]}
-      	};
-      	function edit#{options[:name].singularize.camelcase}(id){
-      	 if( id != null )
-           #{options[:edit_function]}
-      	 else
-      	 	alert("Please select a #{options[:name].singularize.downcase} to edit.");
-      	 };
-
-      	function delete#{options[:name].singularize.camelcase}(id){
-      		if ( id != null )
-            #{options[:delete_function]}
-      		else
-      			alert("Please select a #{options[:name].singularize.downcase} to delete");
-      		}
-      	function getPage(id){
-      	  if ( id != null )
-            document.location=#{ options[:get_page_for_selected_id] };
-      		else
-      			alert("Please select a #{options[:name].singularize.downcase}");
-      		}
-
-      </script>
-  )
-  end
-end
 
 module Jqgrid
 
@@ -1000,6 +912,7 @@ module Jqgrid
     end
   end
 
+
   module ApplicationHelper
     def jqgrid_restful_add_edit_delete_buttons(options={})
       options[:width] ||= 600
@@ -1044,14 +957,18 @@ module Jqgrid
       		});
     		)
 
-      options[:duplicate_function] ||= %Q(
-     	 	jQuery("##{options[:div_object]}").editGridRow(id,
+      options[:copy_function] ||= %Q(
+     	 	jQuery("##{options[:div_object]}").delGridRow(id,
      	 		{	mtype:'POST',
      	 			closeAfterEdit:true,
      	 			width:#{options[:width]},
      				afterSubmit:checkForAndDisplayErrors,
      	 			reloadAfterSubmit:true,
-     	 			url:'#{ options[:base_path] }/' + id + '/duplicate.json?' + (window.rails_authenticity_token ? '&authenticity_token='+encodeURIComponent(window.rails_authenticity_token) : '')
+            caption: "Copy",
+            msg: "Copy selected #{options[:name].singularize.camelcase}?",
+            bSubmit: "Copy",
+            bCancel: "Cancel",
+     	 			url:'#{ options[:base_path] }/' + id + '/copy.json?' + (window.rails_authenticity_token ? '&authenticity_token='+encodeURIComponent(window.rails_authenticity_token) : '')
     				#{events}
      			}
      			);
@@ -1078,6 +995,12 @@ module Jqgrid
         		else
         			alert("Please select a #{options[:name].singularize.downcase} to delete");
         		}
+      		function copy#{options[:name].singularize.camelcase}(id){
+        		if ( id != null )
+              #{options[:copy_function]}
+        		else
+        			alert("Please select a #{options[:name].singularize.downcase} to copy");
+        		}	
         	function getPage(id){
         	  if ( id != null )
               document.location=#{ options[:get_page_for_selected_id] };
@@ -1089,6 +1012,7 @@ module Jqgrid
     )
     end
   end
+
 
 module JqgridNotifiable
   def jqgrid_error_messages_for(activerecord_object)
