@@ -28,6 +28,7 @@ module Jqgrid
             :gridview            => 'false',
             :error_handler       => 'null',
             :inline_edit_handler => 'null',
+            :double_click_handler => 'null',
             :add                 => 'false',
             :delete              => 'false',
             :search              => 'true',
@@ -126,6 +127,16 @@ module Jqgrid
               #{options[:selection_handler]}(id); 
             } 
           },/
+        end
+
+        # doubleclick
+        double_click = ""
+        if options[:double_click_handler].present?
+          double_click = %Q/
+          ondblClickRow: function(id){ 
+            #{options[:double_click_handler]}(id);
+          },
+          /
         end
 
         # Enable grid_loaded callback
@@ -304,6 +315,7 @@ module Jqgrid
               #{masterdetails}
               #{grid_loaded}
               #{direct_link}
+              #{double_click}
               #{editable}
               #{subgrid_enabled}
               #{subgrid}
